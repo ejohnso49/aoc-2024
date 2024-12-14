@@ -1,0 +1,15 @@
+bin = [
+    { name = "day1", path = "day1/src/main.rs" },
+    { name = "day2", path = "day2/src/main.rs" },
+    { name = "day3", path = "day3/src/main.rs" },
+    { name = "day4", path = "day4/src/main.rs" },
+    { name = "day5", path = "day5/src/main.rs" },
+]
+
+[package]
+name = "rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+regex = "1.11.1"
