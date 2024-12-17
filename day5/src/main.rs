@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{cmp::Ordering, collections::HashMap, fs};
 use regex::Regex;
 
 fn main() {
@@ -15,7 +15,7 @@ fn main() {
     println!("rules: {:?}", rules);
     println!("updates: {:?}", updates);
     let result = determine_valid_updates(&updates, &rules);
-    println!("Found {result}");
+    println!("Found {result:?}");
 }
 
 fn get_rules(contents: &str) -> HashMap<u32, Vec<u32>> {
@@ -44,8 +44,10 @@ fn get_page_updates(contents: &str) -> Vec<Vec<u32>> {
     page_updates
 }
 
-fn determine_valid_updates(updates: &Vec<Vec<u32>>, rules: &HashMap<u32, Vec<u32>>) -> u32 {
-    let mut result: u32 = 0;
+fn determine_valid_updates(updates: &Vec<Vec<u32>>, rules: &HashMap<u32, Vec<u32>>) -> (u32, u32) {
+    let mut good_result: u32 = 0;
+    let mut fixed_result: u32 = 0;
+    let mut unfixed_updates: Vec<&Vec<u32>> = Vec::new();
     
     for update in updates {
         let mut good_update = true;
@@ -54,7 +56,6 @@ fn determine_valid_updates(updates: &Vec<Vec<u32>>, rules: &HashMap<u32, Vec<u32
             page_positions.insert(*page, index);
         }
 
-        println!("page_positions: {:?}", page_positions);
         'pages: for i in 0..update.len() {
             if !rules.contains_key(&update[i]) {
                 continue;
@@ -72,10 +73,43 @@ fn determine_valid_updates(updates: &Vec<Vec<u32>>, rules: &HashMap<u32, Vec<u32
                 }
             }
         }
+        // If good, update good result and continue
         if good_update {
             let middle_index = update.len() / 2;
-            result += update[middle_index];
+            good_result += update[middle_index];
+            continue;
         }
+
+        // We hit a bad update, fix it then update the bad result
+        unfixed_updates.push(update);
     }
-    result
+
+    // Fix problem updates
+    for update in unfixed_updates {
+        println!("Found unfixed update {update:?}");
+        let mut update = update.clone();
+        update.sort_by(|a, b| {
+            let rules_a = rules.get(a);
+            let rules_b = rules.get(b);
+
+            if rules_a.is_some() {
+                if rules_a.unwrap().contains(b) {
+                    return Ordering::Less
+                }
+            }
+
+            if rules_b.is_some() {
+                if rules_b.unwrap().contains(a) {
+                    return Ordering::Greater
+                }
+            }
+
+            Ordering::Equal
+        });
+
+        let middle_index = update.len() / 2;
+        fixed_result += update[middle_index];
+
+    }
+    (good_result, fixed_result)
 }
