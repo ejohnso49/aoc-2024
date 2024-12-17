@@ -4,6 +4,7 @@ bin = [
     { name = "day3", path = "day3/src/main.rs" },
     { name = "day4", path = "day4/src/main.rs" },
     { name = "day5", path = "day5/src/main.rs" },
+    { name = "day6", path = "day6/src/main.rs" },
 ]
 
 [package]
