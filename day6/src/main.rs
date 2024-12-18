@@ -88,55 +88,13 @@ impl fmt::Display for Location {
     }
 }
 
-#[derive(Debug)]
-struct LabMap {
+#[derive(Debug, Clone)]
+struct Lab {
     guard: Guard,
     map: Vec<Vec<Location>>
 }
 
-impl LabMap {
-    pub fn count_guard_steps(&mut self) -> u32 {
-        let x_max = self.map[0].len();
-        let y_max = self.map.len();
-        while self.guard.current.0 < x_max.try_into().unwrap() && self.guard.current.1 < y_max.try_into().unwrap() && self.guard.current.0 >= 0 && self.guard.current.1 >= 0 {
-            println!("{self}");
-            let x: usize = self.guard.current.0.try_into().unwrap();
-            let y: usize = self.guard.current.1.try_into().unwrap();
-            let location = &mut self.map[y][x];
-            if let LocationType::Space = location.loc_type {
-                if !location.visited {
-                    location.visited = true;
-                }
-            }
-
-            let (next_x, next_y) = self.guard.try_step();
-            if next_x < x_max.try_into().unwrap() && next_y < y_max.try_into().unwrap() && next_x >= 0 && next_y >= 0 {
-                let next_x: usize = next_x.try_into().unwrap();
-                let next_y: usize = next_y.try_into().unwrap();
-
-                let next_location = &self.map[next_y][next_x];
-                match next_location.loc_type {
-                    LocationType::Space => self.guard.step(),
-                    LocationType::Obstacle => self.guard.rotate(),
-                }
-            } else {
-                break;
-            }
-        }
-
-        let mut count: u32 = 0;
-        for x in 0..x_max {
-            for y in 0..y_max {
-                if self.map[y][x].visited {
-                    count += 1;
-                }
-            }
-        }
-        count
-    }
-}
-
-impl fmt::Display for LabMap {
+impl fmt::Display for Lab {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (y, line) in self.map.iter().enumerate() {
             for (x, location) in line.iter().enumerate() {
@@ -159,12 +117,12 @@ fn main() {
         Err(error) => panic!("fuck hit an {error}"),
     };
 
-    let mut map = create_map(&contents);
-    println!("{map}");
-    println!("Guard moved {} steps", map.count_guard_steps());
+    let lab = create_lab(&contents);
+    println!("{lab}");
+    println!("Guard moved {} steps", count_guard_steps(&lab));
 }
 
-fn create_map(contents: &str) -> LabMap {
+fn create_lab(contents: &str) -> Lab {
     let mut map: Vec<Vec<Location>> = Vec::new();
     let mut guard = Guard{start: (0,0), current: (0,0), direction: GuardDirection::Down};
     // Iterate through each line
@@ -183,5 +141,47 @@ fn create_map(contents: &str) -> LabMap {
         }
         map.push(line_vec);
     }
-    LabMap{map: map, guard: guard}
+    Lab{map: map, guard: guard}
+}
+
+fn count_guard_steps(lab: &Lab) -> u32 {
+    let mut map = lab.map.clone();
+    let mut guard = lab.guard.clone();
+    let x_max = map[0].len();
+    let y_max = map.len();
+    while lab.guard.current.0 < x_max.try_into().unwrap() && guard.current.1 < y_max.try_into().unwrap() && guard.current.0 >= 0 && guard.current.1 >= 0 {
+        println!("{lab}");
+        let x: usize = guard.current.0.try_into().unwrap();
+        let y: usize = guard.current.1.try_into().unwrap();
+        let location = &mut map[y][x];
+        if let LocationType::Space = location.loc_type {
+            if !location.visited {
+                location.visited = true;
+            }
+        }
+
+        let (next_x, next_y) = guard.try_step();
+        if next_x < x_max.try_into().unwrap() && next_y < y_max.try_into().unwrap() && next_x >= 0 && next_y >= 0 {
+            let next_x: usize = next_x.try_into().unwrap();
+            let next_y: usize = next_y.try_into().unwrap();
+
+            let next_location = &map[next_y][next_x];
+            match next_location.loc_type {
+                LocationType::Space => guard.step(),
+                LocationType::Obstacle => guard.rotate(),
+            }
+        } else {
+            break;
+        }
+    }
+
+    let mut count: u32 = 0;
+    for x in 0..x_max {
+        for y in 0..y_max {
+            if map[y][x].visited {
+                count += 1;
+            }
+        }
+    }
+    count
 }
