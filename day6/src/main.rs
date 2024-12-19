@@ -1,5 +1,5 @@
 use core::fmt;
-use std::fs;
+use std::{collections::HashMap, fs};
 
 #[derive(Debug, Clone)]
 enum GuardDirection {
@@ -14,6 +14,7 @@ struct Guard {
     start: (isize, isize),
     current: (isize, isize),
     direction: GuardDirection,
+    steps: HashMap<(isize, isize), u32>,
 }
 
 impl fmt::Display for Guard {
@@ -29,6 +30,15 @@ impl fmt::Display for Guard {
 }
 
 impl Guard {
+    fn new(start: (isize, isize)) -> Self {
+        Guard{
+            start: start,
+            current: start,
+            direction: GuardDirection::Up,
+            steps: HashMap::new()
+        }
+    }
+
     fn try_step(&self) -> (isize, isize) {
         let (delta_x, delta_y) = self.get_step_deltas();
         (self.current.0 + delta_x, self.current.1 + delta_y)
@@ -37,6 +47,8 @@ impl Guard {
     fn step(&mut self) {
         let (delta_x, delta_y) = self.get_step_deltas();
         self.current = (self.current.0 + delta_x, self.current.1 + delta_y);
+        let count = self.steps.entry(self.current).or_insert(1);
+        *count += 1;
     }
 
     fn rotate(&mut self) {
@@ -64,24 +76,9 @@ enum LocationType {
     Obstacle,
 }
 
-#[derive(Debug, Clone)]
-struct Location {
-    loc_type: LocationType,
-    visited: bool,
-}
-
-impl Location {
-    pub fn new(loc_type: LocationType) -> Self {
-        Self {
-            loc_type: loc_type,
-            visited: false
-        }
-    }
-}
-
-impl fmt::Display for Location {
+impl fmt::Display for LocationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.loc_type {
+        match self {
             LocationType::Space => write!(f, "."),
             LocationType::Obstacle => write!(f, "#"),
         }
@@ -91,7 +88,7 @@ impl fmt::Display for Location {
 #[derive(Debug, Clone)]
 struct Lab {
     guard: Guard,
-    map: Vec<Vec<Location>>
+    map: Vec<Vec<LocationType>>
 }
 
 impl fmt::Display for Lab {
@@ -100,8 +97,9 @@ impl fmt::Display for Lab {
             for (x, location) in line.iter().enumerate() {
                 if self.guard.current == (x.try_into().unwrap(), y.try_into().unwrap()) {
                     write!(f, "{}", self.guard)?;
+                } else {
+                    write!(f, "{location}")?;
                 }
-                write!(f, "{location}")?;
             }
             write!(f, "\n")?;
         }
@@ -123,18 +121,18 @@ fn main() {
 }
 
 fn create_lab(contents: &str) -> Lab {
-    let mut map: Vec<Vec<Location>> = Vec::new();
-    let mut guard = Guard{start: (0,0), current: (0,0), direction: GuardDirection::Down};
+    let mut map: Vec<Vec<LocationType>> = Vec::new();
+    let mut guard = Guard::new((0,0));
     // Iterate through each line
     for (y, line) in contents.lines().enumerate() {
-        let mut line_vec: Vec<Location> = Vec::new();
+        let mut line_vec: Vec<LocationType> = Vec::new();
         for (x, line_char) in line.chars().enumerate() {
             match line_char {
-                '.' => line_vec.push(Location::new(LocationType::Space)),
-                '#' => line_vec.push(Location::new(LocationType::Obstacle)),
+                '.' => line_vec.push(LocationType::Space),
+                '#' => line_vec.push(LocationType::Obstacle),
                 '^' => {
-                    line_vec.push(Location::new(LocationType::Space));
-                    guard = Guard{start: (x.try_into().unwrap(), y.try_into().unwrap()), current: (x.try_into().unwrap(), y.try_into().unwrap()), direction: GuardDirection::Up};
+                    line_vec.push(LocationType::Space);
+                    guard = Guard::new((x.try_into().unwrap(), y.try_into().unwrap()));
                 },
                 _ => panic!("Unexpected char found: {line_char}")
             }
@@ -145,7 +143,7 @@ fn create_lab(contents: &str) -> Lab {
 }
 
 fn count_guard_steps(lab: &Lab) -> u32 {
-    let mut map = lab.map.clone();
+    let map = lab.map.clone();
     let mut guard = lab.guard.clone();
     let x_max = map[0].len();
     let y_max = map.len();
@@ -153,11 +151,12 @@ fn count_guard_steps(lab: &Lab) -> u32 {
         println!("{lab}");
         let x: usize = guard.current.0.try_into().unwrap();
         let y: usize = guard.current.1.try_into().unwrap();
-        let location = &mut map[y][x];
-        if let LocationType::Space = location.loc_type {
-            if !location.visited {
-                location.visited = true;
-            }
+        match map[y][x] {
+            LocationType::Space => {
+                let step = guard.steps.entry((guard.current.0, guard.current.1)).or_default();
+                *step += 1;
+            },
+            LocationType::Obstacle => panic!("Guard occupies obstacle at {x}, {y}"),
         }
 
         let (next_x, next_y) = guard.try_step();
@@ -166,7 +165,7 @@ fn count_guard_steps(lab: &Lab) -> u32 {
             let next_y: usize = next_y.try_into().unwrap();
 
             let next_location = &map[next_y][next_x];
-            match next_location.loc_type {
+            match next_location {
                 LocationType::Space => guard.step(),
                 LocationType::Obstacle => guard.rotate(),
             }
@@ -175,13 +174,5 @@ fn count_guard_steps(lab: &Lab) -> u32 {
         }
     }
 
-    let mut count: u32 = 0;
-    for x in 0..x_max {
-        for y in 0..y_max {
-            if map[y][x].visited {
-                count += 1;
-            }
-        }
-    }
-    count
+    guard.steps.keys().len().try_into().unwrap()
 }
