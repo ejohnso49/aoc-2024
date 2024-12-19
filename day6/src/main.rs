@@ -9,15 +9,8 @@ enum GuardDirection {
     Right
 }
 
-#[derive(Debug)]
-enum GuardError {
-    Exit,
-    LoopDetected(u32)
-}
-
 #[derive(Debug, Clone)]
 struct Guard {
-    start: (usize, usize),
     current: (usize, usize),
     direction: GuardDirection,
     steps: HashMap<(usize, usize), u32>,
@@ -38,7 +31,6 @@ impl fmt::Display for Guard {
 impl Guard {
     fn new(start: (usize, usize)) -> Self {
         Guard{
-            start: start,
             current: start,
             direction: GuardDirection::Up,
             steps: HashMap::new()
@@ -49,10 +41,11 @@ impl Guard {
         self.current = new_location;
     }
 
-    fn increment_step_count(&mut self) -> Result<(), GuardError> {
+    fn increment_step_count(&mut self) -> Result<(), u32> {
         let count_entry = self.steps.entry((self.current.0, self.current.1)).or_default();
-        if *count_entry > 2 {
-            Err(GuardError::LoopDetected(*count_entry))
+        *count_entry += 1;
+        if *count_entry > 4 {
+            Err(*count_entry)
         } else {
             Ok(())
         }
@@ -121,6 +114,7 @@ impl fmt::Display for Lab {
 
 fn main() {
     let file_result = fs::read_to_string("input.txt");
+    let mut obstruction_locations: u32 = 0;
 
     let contents = match file_result {
         Ok(contents) => contents,
@@ -128,8 +122,26 @@ fn main() {
     };
 
     let lab = create_lab(&contents);
+    let guard = run_guard_path(&lab).unwrap();
     println!("{lab}");
-    println!("Guard moved {:?} steps", count_guard_steps(&lab));
+    println!("Guard moved {:?} steps", guard.unique_steps());
+
+    let original_steps: Vec<&(usize, usize)> = guard.steps.keys().collect();
+    for location in original_steps {
+        if location.0 == lab.guard.current.0 && location.1 == lab.guard.current.1 {
+            continue;
+        }
+
+        let mut new_lab = lab.clone();
+        new_lab.map[location.1][location.0] = LocationType::Obstacle;
+        // println!("Placing obstacle at {}, {}", location.0, location.1);
+        match run_guard_path(&new_lab) {
+            Err(_) => obstruction_locations += 1,
+            Ok(_) => (),
+        }
+    }
+
+    println!("Found {obstruction_locations} obstruction locations");
 }
 
 fn create_lab(contents: &str) -> Lab {
@@ -154,15 +166,15 @@ fn create_lab(contents: &str) -> Lab {
     Lab{map: map, guard: guard}
 }
 
-fn count_guard_steps(lab: &Lab) -> Result<u32, GuardError> {
+fn run_guard_path(lab: &Lab) -> Result<Guard, u32> {
     let map = lab.map.clone();
     let mut guard = lab.guard.clone();
     let x_max = map[0].len();
     let y_max = map.len();
     while lab.guard.current.0 < x_max && guard.current.1 < y_max {
         // println!("{lab}");
-        let x: usize = guard.current.0.try_into().unwrap();
-        let y: usize = guard.current.1.try_into().unwrap();
+        let x: usize = guard.current.0;
+        let y: usize = guard.current.1;
         match map[y][x] {
             LocationType::Space => guard.increment_step_count()?,
             LocationType::Obstacle => panic!("Guard occupies obstacle at {x}, {y}"),
@@ -174,16 +186,16 @@ fn count_guard_steps(lab: &Lab) -> Result<u32, GuardError> {
         // Calculate the new x and y values. If we've moved out of the boundaries, calculate the unique steps
         let new_x = match guard.current.0.checked_add_signed(delta_x) {
             Some(x) => x,
-            None => return Ok(guard.unique_steps()),
+            None => return Ok(guard),
         };
         let new_y = match guard.current.1.checked_add_signed(delta_y) {
             Some(y) => y,
-            None => return Ok(guard.unique_steps()),
+            None => return Ok(guard),
         };
 
         // Check that we're within array bounds, if not return current unique steps
         if new_x >= x_max || new_y >= y_max {
-            return Ok(guard.unique_steps());
+            return Ok(guard);
         }
 
         let next_location = &map[new_y][new_x];
