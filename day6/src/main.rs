@@ -11,15 +11,16 @@ enum GuardDirection {
 
 #[derive(Debug)]
 enum GuardError {
+    Exit,
     LoopDetected(u32)
 }
 
 #[derive(Debug, Clone)]
 struct Guard {
-    start: (isize, isize),
-    current: (isize, isize),
+    start: (usize, usize),
+    current: (usize, usize),
     direction: GuardDirection,
-    steps: HashMap<(isize, isize), u32>,
+    steps: HashMap<(usize, usize), u32>,
 }
 
 impl fmt::Display for Guard {
@@ -35,7 +36,7 @@ impl fmt::Display for Guard {
 }
 
 impl Guard {
-    fn new(start: (isize, isize)) -> Self {
+    fn new(start: (usize, usize)) -> Self {
         Guard{
             start: start,
             current: start,
@@ -44,14 +45,8 @@ impl Guard {
         }
     }
 
-    fn get_next_step(&self) -> (isize, isize) {
-        let (delta_x, delta_y) = self.get_step_deltas();
-        (self.current.0 + delta_x, self.current.1 + delta_y)
-    }
-
-    fn step(&mut self) {
-        let (delta_x, delta_y) = self.get_step_deltas();
-        self.current = (self.current.0 + delta_x, self.current.1 + delta_y);
+    fn step(&mut self, new_location: (usize, usize)) {
+        self.current = new_location;
     }
 
     fn increment_step_count(&mut self) -> Result<(), GuardError> {
@@ -80,6 +75,10 @@ impl Guard {
             GuardDirection::Left => (-1, 0),
             GuardDirection::Right => (1, 0),
         }
+    }
+
+    fn unique_steps(&self) -> u32 {
+        self.steps.keys().len().try_into().unwrap()
     }
 }
 
@@ -160,7 +159,7 @@ fn count_guard_steps(lab: &Lab) -> Result<u32, GuardError> {
     let mut guard = lab.guard.clone();
     let x_max = map[0].len();
     let y_max = map.len();
-    while lab.guard.current.0 < x_max.try_into().unwrap() && guard.current.1 < y_max.try_into().unwrap() && guard.current.0 >= 0 && guard.current.1 >= 0 {
+    while lab.guard.current.0 < x_max && guard.current.1 < y_max {
         // println!("{lab}");
         let x: usize = guard.current.0.try_into().unwrap();
         let y: usize = guard.current.1.try_into().unwrap();
@@ -169,20 +168,29 @@ fn count_guard_steps(lab: &Lab) -> Result<u32, GuardError> {
             LocationType::Obstacle => panic!("Guard occupies obstacle at {x}, {y}"),
         }
 
-        let (next_x, next_y) = guard.get_next_step();
-        if next_x >= 0 && next_y >= 0 && next_x < x_max.try_into().unwrap() && next_y < y_max.try_into().unwrap() {
-            let next_x: usize = next_x.try_into().unwrap();
-            let next_y: usize = next_y.try_into().unwrap();
+        // Get the next steps for the guard
+        let (delta_x, delta_y) = guard.get_step_deltas();
 
-            let next_location = &map[next_y][next_x];
-            match next_location {
-                LocationType::Space => guard.step(),
-                LocationType::Obstacle => guard.rotate(),
-            }
-        } else {
-            break;
+        // Calculate the new x and y values. If we've moved out of the boundaries, calculate the unique steps
+        let new_x = match guard.current.0.checked_add_signed(delta_x) {
+            Some(x) => x,
+            None => return Ok(guard.unique_steps()),
+        };
+        let new_y = match guard.current.1.checked_add_signed(delta_y) {
+            Some(y) => y,
+            None => return Ok(guard.unique_steps()),
+        };
+
+        // Check that we're within array bounds, if not return current unique steps
+        if new_x >= x_max || new_y >= y_max {
+            return Ok(guard.unique_steps());
+        }
+
+        let next_location = &map[new_y][new_x];
+        match next_location {
+            LocationType::Space => guard.step((new_x, new_y)),
+            LocationType::Obstacle => guard.rotate(),
         }
     }
-
-    Ok(guard.steps.keys().len().try_into().unwrap())
+    panic!("We exited the while loop through an unexpected path");
 }
